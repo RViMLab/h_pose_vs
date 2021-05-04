@@ -15,4 +15,5 @@ alpha: 0.1
 link: 'storz_exoscope_link_cm_optical'
 
 # threshold, max velocity
-t_td: 10.0
+th_t: 0.01
+th_t_scale: [1.0, 1.0, 1.0, 0.1, 0.1, 0.1]

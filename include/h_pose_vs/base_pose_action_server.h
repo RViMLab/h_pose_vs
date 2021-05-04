@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+#include <tuple>
 #include <Eigen/Core>
 
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -8,7 +10,7 @@
 #include <geometry_msgs/Twist.h>
 #include <control_msgs/FollowJointTrajectoryAction.h>
 
-#include <h_pose_vs/cartesianAction.h>
+#include <h_pose_vs/poseAction.h>
 #include <h_pose_vs/damped_least_squares.h>
 
 
@@ -20,7 +22,7 @@ class BasePoseActionServer {
     public:
         BasePoseActionServer(
             ros::NodeHandle nh, std::string action_server, std::string control_client,
-            std::vector<double> kp,
+            std::vector<double> kp, double th_t, std::vector<double> th_scale,
             std::string planning_group, std::string link,
             double dt, double alpha
         );
@@ -33,7 +35,7 @@ class BasePoseActionServer {
 
         // Server to handle goals via _goalCB callback
         std::string _action_server;
-        actionlib::SimpleActionServer<h_pose_vs::cartesianAction> _as;
+        actionlib::SimpleActionServer<h_pose_vs::poseAction> _as;
 
         // Client to request joint angle goals on actual robot
         std::string _control_client;
@@ -42,6 +44,10 @@ class BasePoseActionServer {
         // Gain
         Eigen::VectorXd _kp;  // proportional gain
 
+        // Threshold and scale
+        double _th_t;
+        Eigen::VectorXd _th_t_scale;
+
         // Robot model
         std::string _planning_group;
         std::string _link;
@@ -49,13 +55,13 @@ class BasePoseActionServer {
         double _dt, _alpha;  // control interval and velocity scaling
 
         // Goal callback
-        void _goalCB(const h_pose_vs::cartesianGoalConstPtr& goal);
+        void _goalCB(const h_pose_vs::poseGoalConstPtr& goal);
 
         // State machine
         actionlib::SimpleClientGoalState _velocityControlStateMachine(Eigen::VectorXd& td);
 
         // Gain control
-        std::vector<double> _computeUpdate(Eigen::VectorXd& td);
+        std::tuple<std::vector<double>, std::vector<double>> _computeUpdate(Eigen::VectorXd& td);
 
         // Execute goal on client robot
         actionlib::SimpleClientGoalState _executeGoal(std::vector<double> q, bool wait_for_result=false);
@@ -64,12 +70,12 @@ class BasePoseActionServer {
 
 BasePoseActionServer::BasePoseActionServer(
     ros::NodeHandle nh, std::string action_server, std::string control_client,
-    std::vector<double> kp,
+    std::vector<double> kp, double th_t, std::vector<double> th_scale,
     std::string planning_group, std::string link,
     double dt, double alpha
 ) : _action_server(action_server), _as(nh, action_server, boost::bind(&BasePoseActionServer::_goalCB, this, _1), false),
     _control_client(control_client), _ac(nh, control_client, false),
-    _kp(Eigen::Map<Eigen::VectorXd>(kp.data(), kp.size())),
+    _kp(Eigen::Map<Eigen::VectorXd>(kp.data(), kp.size())), _th_t(th_t), _th_t_scale(Eigen::Map<Eigen::VectorXd>(th_scale.data(), th_scale.size())),
     _planning_group(planning_group), _link(link),
     _move_group(planning_group),
     _dt(dt), _alpha(alpha) {
@@ -82,12 +88,12 @@ BasePoseActionServer::BasePoseActionServer(
 };
 
 
-void BasePoseActionServer::_goalCB(const h_pose_vs::cartesianGoalConstPtr& goal) {
+void BasePoseActionServer::_goalCB(const h_pose_vs::poseGoalConstPtr& goal) {
     
     // Desired task from goal
     Eigen::VectorXd td;
 
-    td = Eigen::VectorXd::Map(goal->task.data(), goal->task.size());
+    td = Eigen::VectorXd::Map(goal->pose.data(), goal->pose.size());
 
     // State machines
     _velocityControlStateMachine(td);
@@ -102,24 +108,34 @@ actionlib::SimpleClientGoalState BasePoseActionServer::_velocityControlStateMach
         return actionlib::SimpleClientGoalState::PREEMPTED;
     }
 
-    auto q = _computeUpdate(td);
+    auto [q, qd]  = _computeUpdate(td);
 
     // add error checks
+    auto e = (_th_t_scale.asDiagonal()*(_computeForwardKinematics(q) - _computeForwardKinematics(qd))).norm();
 
-    // error computation
-    _executeGoal(q);
+    if (e > _th_t) {
+        ROS_WARN("Goal rejected due to threshold limit.");
+        _as.setAborted();
+        return actionlib::SimpleClientGoalState::REJECTED;
+    }
+
+    _executeGoal(qd);
+
+    h_pose_vs::poseResult result;
+    result.pose = qd;
+    _as.setSucceeded(result);
     return actionlib::SimpleClientGoalState::SUCCEEDED;
-    // _as.setSucceeded();   to pub lish result 
 };
 
 
-std::vector<double> BasePoseActionServer::_computeUpdate(Eigen::VectorXd& td) {
+std::tuple<std::vector<double>, std::vector<double>> BasePoseActionServer::_computeUpdate(Eigen::VectorXd& td) {
     // Compute jacobian
     auto robot_state = _move_group.getCurrentState();
     auto q = _move_group.getCurrentJointValues();
+    auto qd = q;
 
     Eigen::MatrixXd J;
-    if (!_computeJacobian(robot_state, J)) return q;
+    if (!_computeJacobian(robot_state, J)) return std::make_tuple(q, qd);
 
     // Gain control
     int n = J.rows();
@@ -129,10 +145,10 @@ std::vector<double> BasePoseActionServer::_computeUpdate(Eigen::VectorXd& td) {
     auto dq = J_inverse*Kp*td;
 
     for (int i = 0; i < q.size(); i++) {
-        q[i] += dq[i]*_dt;
+        qd[i] = q[i] + dq[i]*_dt;
     }
 
-    return q;
+    return std::make_tuple(q, qd);
 };
 
 

@@ -10,7 +10,7 @@ class LocalPoseActionServer : public BasePoseActionServer {
     public:
         LocalPoseActionServer(
             ros::NodeHandle nh, std::string action_server, std::string control_client,
-            std::vector<double> kp,
+            std::vector<double> kp, double th_t, std::vector<double> th_t_scale,
             std::string planning_group, std::string link,
             double dt, double alpha
         );
@@ -23,25 +23,31 @@ class LocalPoseActionServer : public BasePoseActionServer {
 
 LocalPoseActionServer::LocalPoseActionServer(
             ros::NodeHandle nh, std::string action_server, std::string control_client,
-            std::vector<double> kp,
+            std::vector<double> kp, double th_t, std::vector<double> th_t_scale,
             std::string planning_group, std::string link,
             double dt, double alpha
 ) : BasePoseActionServer(
     nh, action_server, control_client,
-    kp,
+    kp, th_t, th_t_scale,
     planning_group, link,
     dt, alpha
 ) { };
 
 
 bool LocalPoseActionServer::_computeJacobian(moveit::core::RobotStatePtr robot_state, Eigen::MatrixXd& J) {
-    // TODO: add rotation
     auto computed = robot_state->getJacobian(
         robot_state->getJointModelGroup(_planning_group),
         robot_state->getLinkModel(_link),
         Eigen::Vector3d::Zero(),
         J
     );
+
+    // Rotate task from world frame to camera frame
+    Eigen::MatrixXd R(6, 6);
+    R << robot_state->getGlobalLinkTransform(_link).rotation().inverse(), Eigen::Matrix3d::Zero(),
+        Eigen::Matrix3d::Zero(), robot_state->getGlobalLinkTransform(_link).rotation().inverse();
+
+    J = R*J;
 
     return computed;
 };

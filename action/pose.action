@@ -1,8 +1,8 @@
 # goal definition
-float64[] task
+float64[] pose
 ---
 # result definition
-float64[] position
+float64[] pose
 ---
 # feedback
 float64[] direction
