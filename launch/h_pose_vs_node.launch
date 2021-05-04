@@ -1,0 +1,6 @@
+<launch>
+    <group ns="lbr">
+        <rosparam command="load" file="$(find h_pose_vs)/config/local_pose_params.yml"/>
+        <node name="h_pose_vs_node" pkg="h_pose_vs" type="h_pose_vs_node" output="screen"/>
+    </group>
+</launch>

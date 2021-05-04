@@ -1,0 +1,18 @@
+action_server: 'Pose_ActionServer'
+control_client: 'PositionJointInterface_trajectory_controller/follow_joint_trajectory'
+planning_group: 'arm_exoscope'
+
+# gains - proportional
+kp: [1.0,1.0,1.0,1.0,1.0,1.0]
+
+# control interval, in velocity control: rate at which rcom goals are sent, else: sets interval to execute incremental motion
+dt: 0.01
+
+# velocity scaling
+alpha: 0.1
+
+# link names
+link: 'storz_exoscope_link_cm_optical'
+
+# threshold, max velocity
+t_td: 10.0
