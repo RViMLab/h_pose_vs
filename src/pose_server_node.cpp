@@ -1,4 +1,4 @@
-
+#include <math.h>
 #include <ros/ros.h>
 
 #include <h_pose_vs/local_pose_action_server.h>
@@ -26,6 +26,28 @@ int main(int argc, char** argv) {
     nh.getParam("alpha", alpha);
     nh.getParam("th_t", th_t);
     nh.getParam("th_t_scale", th_t_scale);
+
+    // Initialize position
+    auto move_group = moveit::planning_interface::MoveGroupInterface(planning_group);
+    move_group.setMaxVelocityScalingFactor(0.01);
+
+    // Set an initial pose, corresponding to p_trocar
+    auto joint_values = move_group.getCurrentJointValues();
+
+    // initial state
+    joint_values[0] = 0.;
+    joint_values[1] = M_PI/3.;
+    joint_values[2] = 0.;
+    joint_values[3] = -M_PI/3.;
+    joint_values[4] = 0.;
+    joint_values[5] = -M_PI/6.;
+    joint_values[6] = 0.;
+
+    move_group.setJointValueTarget(joint_values);
+    move_group.move();
+    move_group.stop();
+
+    move_group.setMaxVelocityScalingFactor(1.0);
 
     LocalPoseActionServer as(
         nh, action_server, control_client,
