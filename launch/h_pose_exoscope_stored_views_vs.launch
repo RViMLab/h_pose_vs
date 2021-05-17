@@ -1,13 +1,13 @@
 <launch>
     <arg name="cname" default="narrow_stereo"/> <!-- replace with exoscope -->
-    <arg name="url" default="package://h_rcom_vs/config/cam_params.yml"/> <!-- replace with exoscope -->
+    <arg name="url" default="package://h_rcm_vs/config/cam_params.yml"/> <!-- replace with exoscope -->
     <arg name="image_topic" default="/lbr/storz_exoscope_camera/image_raw"/>
     <arg name="sim" default="True"/>
     <arg name="repeat" default="True"/>
 
     <group ns="lbr">
 
-        <!-- load parameters for homography rcom vs -->
+        <!-- load parameters for homography rcm vs -->
         <rosparam command="load" file="$(find h_pose_vs)/config/h_vs_params.yml"/>
         <rosparam command="load" file="$(find h_pose_vs)/config/local_pose_params.yml"/>
 
@@ -47,8 +47,8 @@
         </node>
 
         <!-- launch action client node 
-                - subscribes to visual_servo/twist, rcom/p_trocar
-                - requests rcom goals from action server under action_server: 'Pose_ActionServer', defined in config/local_pose_params.yml
+                - subscribes to visual_servo/twist, rcm/p_trocar
+                - requests rcm goals from action server under action_server: 'Pose_ActionServer', defined in config/local_pose_params.yml
         -->
         <node name="pose_client_node" pkg="h_pose_vs" type="pose_client_node" output="screen"/>
     </group>
